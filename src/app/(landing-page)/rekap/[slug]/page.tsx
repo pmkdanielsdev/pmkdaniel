@@ -740,7 +740,7 @@ export default function RekapPage({ params }: RekapPageProps) {
                 <thead className="bg-slate-100/95 sticky top-0 z-20 backdrop-blur-md border-b border-gray-200">
                   <tr>
                     {/* Fixed Selection Status Column for Panitia */}
-                    <th className="px-3 py-3 text-[11px] font-extrabold text-slate-700 uppercase tracking-wider sticky left-0 bg-slate-100 z-30 w-36 border-r border-gray-200">
+                    <th className="px-3 py-3 text-[11px] font-extrabold text-slate-700 uppercase tracking-wider whitespace-nowrap sticky left-0 bg-slate-100 z-30 w-44 min-w-[172px] border-r border-gray-200">
                       Status Seleksi
                     </th>
 
@@ -795,7 +795,7 @@ export default function RekapPage({ params }: RekapPageProps) {
                       return (
                         <tr key={rIdx} className="hover:bg-primary/[0.02] transition-colors group">
                           {/* Selection Status Dropdown */}
-                          <td className="px-3 py-2.5 border-r border-gray-200/80 sticky left-0 bg-white group-hover:bg-[#F9F9FD] z-10 align-middle">
+                          <td className="px-3 py-2.5 border-r border-gray-200/80 sticky left-0 bg-white group-hover:bg-[#F9F9FD] z-10 align-middle min-w-[172px]">
                             <PopoverSelect<ReviewStatus>
                               value={review.status}
                               onChange={(val) => saveReviewNote(rowId, val)}

@@ -40,7 +40,8 @@ export function PopoverSelect<T extends string = string>({
 
   const selectedOption = options.find((opt) => opt.value === value);
 
-  const updatePosition = () => {
+  useLayoutEffect(() => {
+    if (!open) return;
     const btn = triggerRef.current;
     if (!btn) return;
     const rect = btn.getBoundingClientRect();
@@ -50,12 +51,7 @@ export function PopoverSelect<T extends string = string>({
     const top = openUp ? Math.max(12, rect.top - 8) : Math.min(window.innerHeight - 12, rect.bottom + 8);
     const left = align === "right" ? rect.right : rect.left;
     setCoords({ top, left, width: rect.width, openUp });
-  };
-
-  useLayoutEffect(() => {
-    if (!open) return;
-    updatePosition();
-  }, [open, options.length]);
+  }, [open, options.length, align]);
 
   useEffect(() => {
     if (!open) return;
