@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, use } from "react";
+import React, { useState, useEffect, useMemo, useRef, use } from "react";
 import Link from "next/link";
 import * as XLSX from "xlsx";
 import { formService } from "@/services/formService";
 import { DynamicForm } from "@/types/form";
+import { PopoverSelect } from "@/components/ui/PopoverSelect";
 import {
   FileSpreadsheet,
   Download,
@@ -77,6 +78,25 @@ export default function RekapPage({ params }: RekapPageProps) {
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [hiddenColumns, setHiddenColumns] = useState<string[]>([]);
   const [showColSelector, setShowColSelector] = useState(false);
+  const colSelectorRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!showColSelector) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (colSelectorRef.current && !colSelectorRef.current.contains(e.target as Node)) {
+        setShowColSelector(false);
+      }
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowColSelector(false);
+    };
+    document.addEventListener("mousedown", handleOutside);
+    document.addEventListener("keydown", handleEsc);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("keydown", handleEsc);
+    };
+  }, [showColSelector]);
 
   // Review status & notes stored locally per form slug
   const [reviewNotes, setReviewNotes] = useState<Record<string, { status: ReviewStatus; note: string }>>({});
@@ -516,7 +536,7 @@ export default function RekapPage({ params }: RekapPageProps) {
         </div>
 
         {/* Spreadsheet Management Toolbar */}
-        <div className="flex flex-col gap-3 bg-white/90 backdrop-blur-md p-4 rounded-2xl border border-gray-200/80 shadow-sm">
+        <div className="relative z-40 flex flex-col gap-3 bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-gray-200/80 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             {/* Search Box */}
             <div className="relative w-full sm:w-80">
@@ -561,29 +581,35 @@ export default function RekapPage({ params }: RekapPageProps) {
               </button>
 
               {/* Column Visibility Selector Toggle */}
-              <div className="relative">
+              <div ref={colSelectorRef} className="relative z-50">
                 <button
                   type="button"
                   onClick={() => setShowColSelector(!showColSelector)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border bg-white border-gray-200 text-slate-700 hover:bg-slate-50 transition-all"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border bg-white border-gray-200 text-slate-700 hover:bg-slate-50 transition-all cursor-pointer"
                 >
                   <Columns size={14} />
                   <span>Atur Kolom</span>
                 </button>
 
                 {showColSelector && (
-                  <div className="absolute right-0 top-12 z-30 w-72 bg-white rounded-2xl shadow-xl border border-gray-200 p-4 flex flex-col gap-2 animate-scaleUp">
+                  <div
+                    data-lenis-prevent="true"
+                    className="absolute right-0 top-12 z-50 w-72 max-w-[calc(100vw-32px)] bg-white rounded-2xl shadow-xl border border-gray-200 p-4 flex flex-col gap-2 animate-scaleUp"
+                  >
                     <div className="flex items-center justify-between pb-2 border-b border-gray-100">
                       <span className="text-xs font-bold text-slate-800">Pilih Kolom Tampil</span>
                       <button
                         type="button"
                         onClick={() => setShowColSelector(false)}
-                        className="text-slate-400 hover:text-slate-600"
+                        className="text-slate-400 hover:text-slate-600 cursor-pointer"
                       >
                         <X size={14} />
                       </button>
                     </div>
-                    <div className="max-h-56 overflow-y-auto flex flex-col gap-1.5">
+                    <div
+                      data-lenis-prevent="true"
+                      className="max-h-56 overflow-y-auto overscroll-contain flex flex-col gap-1.5"
+                    >
                       {headers.map((h, i) => (
                         <label key={i} className="flex items-center gap-2.5 text-xs text-slate-700 cursor-pointer hover:bg-slate-50 p-1.5 rounded-lg">
                           <input
@@ -626,36 +652,30 @@ export default function RekapPage({ params }: RekapPageProps) {
                 <span className="text-xs font-bold text-slate-700">Filter Berdasarkan:</span>
                 
                 {/* Select Column */}
-                <select
+                <PopoverSelect
                   value={newFilterCol}
-                  onChange={(e) => {
-                    setNewFilterCol(e.target.value);
+                  onChange={(colVal) => {
+                    setNewFilterCol(colVal);
                     setNewFilterVal("");
                   }}
-                  className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                >
-                  <option value="">-- Pilih Kolom --</option>
-                  {headers.map((h, i) => (
-                    <option key={i} value={h}>
-                      {h}
-                    </option>
-                  ))}
-                </select>
+                  title="Pilih Kolom Filter"
+                  placeholder="-- Pilih Kolom --"
+                  menuWidthClassName="w-72"
+                  triggerClassName="h-9 px-3 rounded-xl border border-gray-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-800 min-w-[180px] max-w-[260px]"
+                  options={headers.map((h) => ({ value: h, label: h }))}
+                />
 
                 {/* Select Value from that column */}
                 {newFilterCol && (
-                  <select
+                  <PopoverSelect
                     value={newFilterVal}
-                    onChange={(e) => setNewFilterVal(e.target.value)}
-                    className="h-9 px-3 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20 max-w-xs truncate"
-                  >
-                    <option value="">-- Pilih Nilai ({uniqueValuesForColumn.length}) --</option>
-                    {uniqueValuesForColumn.map((val, vIdx) => (
-                      <option key={vIdx} value={val}>
-                        {val}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setNewFilterVal}
+                    title={`Nilai: ${newFilterCol}`}
+                    placeholder={`-- Pilih Nilai (${uniqueValuesForColumn.length}) --`}
+                    menuWidthClassName="w-72"
+                    triggerClassName="h-9 px-3 rounded-xl border border-gray-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-800 min-w-[180px] max-w-xs"
+                    options={uniqueValuesForColumn.map((val) => ({ value: val, label: val }))}
+                  />
                 )}
 
                 <button
@@ -694,7 +714,7 @@ export default function RekapPage({ params }: RekapPageProps) {
         </div>
 
         {/* Main Spreadsheet Table Container */}
-        <div className="bg-white/95 backdrop-blur-xl rounded-[28px] border border-gray-200/90 shadow-[0_8px_32px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col">
+        <div className="relative z-10 bg-white/95 backdrop-blur-xl rounded-[28px] border border-gray-200/90 shadow-[0_8px_32px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-24 gap-3">
               <RefreshCw size={28} className="animate-spin text-primary" />
@@ -711,7 +731,10 @@ export default function RekapPage({ params }: RekapPageProps) {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto max-h-[70vh] relative">
+            <div
+              data-lenis-prevent="true"
+              className="overflow-auto overscroll-contain max-h-[70vh] relative"
+            >
               <table className="w-full text-left border-collapse">
                 {/* Sticky Header with Sorting Indicators */}
                 <thead className="bg-slate-100/95 sticky top-0 z-20 backdrop-blur-md border-b border-gray-200">
@@ -773,17 +796,18 @@ export default function RekapPage({ params }: RekapPageProps) {
                         <tr key={rIdx} className="hover:bg-primary/[0.02] transition-colors group">
                           {/* Selection Status Dropdown */}
                           <td className="px-3 py-2.5 border-r border-gray-200/80 sticky left-0 bg-white group-hover:bg-[#F9F9FD] z-10 align-middle">
-                            <select
+                            <PopoverSelect<ReviewStatus>
                               value={review.status}
-                              onChange={(e) => saveReviewNote(rowId, e.target.value as ReviewStatus)}
-                              className={`w-full py-1 px-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${currentStatusOpt.bg} ${currentStatusOpt.color} ${currentStatusOpt.border}`}
-                            >
-                              {REVIEW_STATUS_OPTIONS.map((opt, oIdx) => (
-                                <option key={oIdx} value={opt.label}>
-                                  {opt.label}
-                                </option>
-                              ))}
-                            </select>
+                              onChange={(val) => saveReviewNote(rowId, val)}
+                              title="Pilih Status Seleksi"
+                              menuWidthClassName="w-56"
+                              triggerClassName={`w-full py-1.5 px-2.5 rounded-xl text-xs font-bold border ${currentStatusOpt.bg} ${currentStatusOpt.color} ${currentStatusOpt.border}`}
+                              options={REVIEW_STATUS_OPTIONS.map((opt) => ({
+                                value: opt.label,
+                                label: opt.label,
+                                badgeClassName: `${opt.bg} ${opt.color} ${opt.border}`,
+                              }))}
+                            />
                           </td>
 
                           {/* Data Cells */}
@@ -873,7 +897,10 @@ export default function RekapPage({ params }: RekapPageProps) {
               </button>
             </div>
 
-            <div className="max-h-[60vh] overflow-y-auto whitespace-pre-wrap text-sm text-slate-800 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-gray-200">
+            <div
+              data-lenis-prevent="true"
+              className="max-h-[60vh] overflow-y-auto overscroll-contain whitespace-pre-wrap text-sm text-slate-800 leading-relaxed bg-slate-50 p-4 rounded-2xl border border-gray-200"
+            >
               {selectedCellContent.content}
             </div>
 
@@ -908,7 +935,10 @@ export default function RekapPage({ params }: RekapPageProps) {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[65vh] overflow-y-auto pr-1">
+            <div
+              data-lenis-prevent="true"
+              className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[65vh] overflow-y-auto overscroll-contain pr-1"
+            >
               {/* Pilihan 1 */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-gray-200/80 flex flex-col gap-2">
                 <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider pb-1 border-b border-gray-200">

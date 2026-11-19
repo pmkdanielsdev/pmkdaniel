@@ -404,14 +404,31 @@ export const formService = {
    * Get form by ID or slug
    */
   async getFormBySlugOrId(idOrSlug: string): Promise<DynamicForm | null> {
-    try {
-      const res = await apiClient.get<ApiResponse<DynamicForm>>(`/dynamic-forms/${idOrSlug}`, {
-        timeout: 4000,
-      });
-      if (res.data?.success && res.data.data) {
-        return res.data.data;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await apiClient.get<ApiResponse<DynamicForm>>(`/dynamic-forms/${idOrSlug}`, {
+          timeout: 10000,
+        });
+        if (res.data?.success && res.data.data) {
+          const currentLocals = getLocalForms();
+          const idx = currentLocals.findIndex(f => f.id === res.data.data!.id);
+          if (idx > -1) {
+            currentLocals[idx] = res.data.data;
+          } else {
+            currentLocals.unshift(res.data.data);
+          }
+          saveLocalForms(currentLocals);
+          return res.data.data;
+        }
+      } catch (err: any) {
+        if (err?.response?.status === 404) {
+          return null;
+        }
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 400));
+        }
       }
-    } catch (err) {}
+    }
 
     // Fallback to local storage
     const localList = getLocalForms();
@@ -502,37 +519,64 @@ export const formService = {
    * Submit answers to form (Public)
    */
   async submitForm(idOrSlug: string, answers: Record<string, any>): Promise<string> {
-    const subId = `sub_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    const submission: FormSubmission = {
-      id: subId,
-      form_id: idOrSlug,
-      answers,
-      submitted_at: new Date().toISOString(),
+    const extractError = (err: any, fallback: string): string => {
+      const data = err?.response?.data;
+      return data?.detail || data?.error || data?.message || err?.message || fallback;
     };
 
-    // Save to local storage for instant access
-    saveLocalSubmission(idOrSlug, submission);
+    let lastError: any = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await apiClient.post<ApiResponse<{ submissionId: string }>>(
+          `/dynamic-forms/${idOrSlug}/submit`,
+          { answers },
+          { timeout: 20000 }
+        );
 
-    // Update submission count locally
-    const currentLocals = getLocalForms();
-    const formIdx = currentLocals.findIndex(f => f.id === idOrSlug || f.slug === idOrSlug);
-    if (formIdx > -1) {
-      currentLocals[formIdx].submission_count = (currentLocals[formIdx].submission_count || 0) + 1;
-      saveLocalForms(currentLocals);
+        if (res.data?.success && res.data?.data?.submissionId) {
+          const submissionId = res.data.data.submissionId;
+          const submission: FormSubmission = {
+            id: submissionId,
+            form_id: idOrSlug,
+            answers,
+            submitted_at: new Date().toISOString(),
+          };
+          saveLocalSubmission(idOrSlug, submission);
+
+          const currentLocals = getLocalForms();
+          const formIdx = currentLocals.findIndex(f => f.id === idOrSlug || f.slug === idOrSlug);
+          if (formIdx > -1) {
+            currentLocals[formIdx].submission_count = (currentLocals[formIdx].submission_count || 0) + 1;
+            saveLocalForms(currentLocals);
+          }
+
+          return submissionId;
+        }
+
+        const apiMessage =
+          (res.data as any)?.detail ||
+          res.data?.error ||
+          res.data?.message ||
+          "Server gagal menyimpan tanggapan formulir.";
+        throw new Error(apiMessage);
+      } catch (err: any) {
+        lastError = err;
+        const status = err?.response?.status;
+        if (status && status >= 400 && status < 500) {
+          throw new Error(extractError(err, "Data formulir tidak valid. Periksa kembali isian Anda."));
+        }
+        if (attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 600));
+        }
+      }
     }
 
-    try {
-      const res = await apiClient.post<ApiResponse<{ submissionId: string }>>(
-        `/dynamic-forms/${idOrSlug}/submit`,
-        { answers },
-        { timeout: 8000 }
-      );
-      if (res.data?.success) {
-        return res.data?.data?.submissionId || subId;
-      }
-    } catch (err) {}
-
-    return subId;
+    throw new Error(
+      extractError(
+        lastError,
+        "Koneksi ke server gagal atau terlalu lambat. Jawaban Anda masih ada di halaman ini, silakan tekan Kirim Formulir lagi."
+      )
+    );
   },
 
   /**
@@ -605,20 +649,29 @@ export const formService = {
         formData,
         {
           headers: { "Content-Type": "multipart/form-data" },
-          timeout: 15000,
+          timeout: 30000,
         }
       );
 
       if (res.data?.success && res.data?.data) {
         return res.data.data;
       }
-    } catch (err) {}
 
-    // Fallback: create an object URL or data URL preview so user is not blocked
-    return {
-      url: URL.createObjectURL(file),
-      fileName: file.name,
-    };
+      const apiMessage =
+        (res.data as any)?.detail ||
+        res.data?.error ||
+        res.data?.message ||
+        "Gagal mengunggah berkas ke server.";
+      throw new Error(apiMessage);
+    } catch (err: any) {
+      const data = err?.response?.data;
+      const message =
+        data?.detail ||
+        data?.error ||
+        data?.message ||
+        "Gagal mengunggah berkas ke server. Periksa koneksi internet Anda dan coba lagi.";
+      throw new Error(message);
+    }
   },
 
   /**

@@ -751,7 +751,7 @@ export default function PublicDynamicFormPage() {
         )}
 
         {/* Dynamic Question Cards Form (Render Only Current Page Fields) */}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
           {currentPage.fields
             .filter((field: FormField) => isFieldVisible(field, answers))
             .map((field: FormField, index: number) => {
@@ -1104,6 +1104,14 @@ export default function PublicDynamicFormPage() {
               </div>
             );
           })}
+
+          {/* Bottom Error Alert Box (visible right above Submit button) */}
+          {errorMsg && (
+            <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl text-sm font-plusJakarta shadow-sm">
+              <AlertCircle size={20} className="shrink-0 text-rose-500" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
 
           {/* Multi-Page Navigation Bar */}
           <div className="rounded-[32px] border border-white/80 bg-white/90 backdrop-blur-xl p-5 sm:p-6 shadow-[0_12px_40px_rgba(0,0,0,0.05)] flex flex-col sm:flex-row items-center justify-between gap-4 mt-2">
